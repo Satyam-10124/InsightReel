@@ -56,11 +56,29 @@ def download_audio(url: str, video_id: str, cache: CacheManager, progress: Optio
         "quiet": True,
         "no_warnings": True,
         "socket_timeout": 60,
-        "retries": 2,
+        "retries": 3,
+        "noplaylist": True,  # avoid playlist traversal
+        "concurrent_fragment_downloads": 1,  # some CDNs 403 on concurrency
+        "geo_bypass": True,
+        "source_address": "0.0.0.0",  # prefer IPv4 to avoid IPv6-only issues
+        "http_headers": {
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/126.0.0.0 Safari/537.36"
+            ),
+            "Accept-Language": "en-US,en;q=0.9",
+        },
+        # Encourage yt-dlp to use Android client where appropriate, which often avoids consent/403 pages
+        "extractor_args": {"youtube": {"player_client": ["android"]}},
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
+        try:
+            ydl.download([url])
+        except Exception as e:
+            # Surface a clearer error upstream
+            raise RuntimeError(f"Audio download failed (yt-dlp): {e}")
 
     final_audio_file = str(paths["audio"])
     possible_files = [output_path + ext for ext in [".wav", ".m4a", ".mp3", ".webm", ".opus"]]

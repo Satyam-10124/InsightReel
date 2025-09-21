@@ -27,6 +27,15 @@ class Transcriber:
     def __init__(self, model_size: str = "small") -> None:
         if whisper is None:
             raise RuntimeError("openai-whisper is required. Install 'openai-whisper'.")
+        # Ensure ffmpeg is discoverable by Whisper
+        try:
+            ffbin = getattr(audio_utils, "FFMPEG_BIN", "ffmpeg")
+            if isinstance(ffbin, str) and os.path.isabs(ffbin) and os.path.exists(ffbin):
+                ffdir = os.path.dirname(ffbin) or "."
+                os.environ["PATH"] = ffdir + os.pathsep + os.environ.get("PATH", "")
+                logger.info(f"🔧 ffmpeg available at {ffbin}")
+        except Exception:
+            pass
         logger.info("🔄 Loading Whisper model...")
         self.model = whisper.load_model(model_size)
         logger.info(f"✅ Whisper loaded ({model_size} model)")

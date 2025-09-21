@@ -108,7 +108,12 @@ class Transcriber:
         logger.info(f"🎤 Transcribing {len(chunks)}/{original_count} chunks in parallel...")
 
         transcripts: List[Dict[str, object]] = []
-        max_workers = max(1, min(multiprocessing.cpu_count() // 2, 3))
+        # Limit concurrency to keep memory usage low on small instances
+        try:
+            workers_env = int(os.getenv("MAX_TRANSCRIBE_WORKERS", "1"))
+        except Exception:
+            workers_env = 1
+        max_workers = max(1, min(workers_env, multiprocessing.cpu_count()))
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {executor.submit(self._transcribe_single_chunk, chunk): i for i, chunk in enumerate(chunks)}
             for future in concurrent.futures.as_completed(futures):

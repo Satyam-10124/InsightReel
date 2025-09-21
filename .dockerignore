@@ -1,0 +1,48 @@
+# Reduce Docker build context
+
+# VCS
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+*.dist-info/
+.venv/
+venv/
+ENV/
+env/
+.mypy_cache/
+.pytype/
+.pyre/
+.pytest_cache/
+
+# OS/IDE
+.DS_Store
+.idea/
+.vscode/
+
+# App caches and temp
+youtube_cache/
+chunk_*.wav
+*.tmp
+.tmp/
+tmp/
+.temp/
+temp/
+logs/
+*.log
+
+# Streamlit
+.streamlit/
+
+# Artifacts
+summary_*.md
+
+# Node (if any)
+node_modules/

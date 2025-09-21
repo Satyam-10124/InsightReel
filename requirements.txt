@@ -11,6 +11,7 @@ numpy>=1.24.0
 
 # Audio processing
 ffmpeg-python>=0.2.0
+imageio-ffmpeg>=0.4.9
 
 # File handling and utilities
 pathlib>=1.0.1
@@ -23,3 +24,7 @@ tqdm>=4.66.1
 
 # Optional: for better performance
 torch>=2.1.0
+
+# API server
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0

@@ -8,6 +8,8 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import wave
+import contextlib
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
@@ -15,6 +17,13 @@ from .cache import CacheManager
 from .logger import get_logger
 
 logger = get_logger(__name__)
+
+# Use imageio-ffmpeg to ensure ffmpeg binary is available on platforms like Railway
+try:
+    import imageio_ffmpeg as iio_ffmpeg  # type: ignore
+    FFMPEG_BIN = iio_ffmpeg.get_ffmpeg_exe()
+except Exception:  # pragma: no cover - optional runtime fetch
+    FFMPEG_BIN = "ffmpeg"  # fallback to system ffmpeg
 
 
 def download_audio(url: str, video_id: str, cache: CacheManager, progress: Optional[Callable[[str], None]] = None) -> str:
@@ -56,6 +65,7 @@ def download_audio(url: str, video_id: str, cache: CacheManager, progress: Optio
             }
         ],
         "postprocessor_args": ["-ac", "1", "-ar", "16000"],
+        "ffmpeg_location": os.path.dirname(FFMPEG_BIN) if os.path.sep in FFMPEG_BIN else None,
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -68,7 +78,7 @@ def download_audio(url: str, video_id: str, cache: CacheManager, progress: Optio
         if os.path.exists(test_file):
             if not test_file.endswith(".wav"):
                 cmd = [
-                    "ffmpeg",
+                    FFMPEG_BIN,
                     "-i",
                     test_file,
                     "-ac",
@@ -91,24 +101,16 @@ def download_audio(url: str, video_id: str, cache: CacheManager, progress: Optio
 
 
 def get_audio_duration(audio_file: str) -> float:
-    """Get audio duration in seconds using ffprobe; fallback to size estimate."""
+    """Get duration of WAV in seconds using Python wave; fallback to size estimate."""
     try:
-        cmd = [
-            "ffprobe",
-            "-v",
-            "quiet",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "csv=p=0",
-            audio_file,
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        if result.returncode == 0 and result.stdout.strip():
-            duration = float(result.stdout.strip())
-            if duration > 0:
-                logger.info(f"📏 Audio duration: {duration/60:.1f} minutes")
-                return duration
+        with contextlib.closing(wave.open(audio_file, "rb")) as wf:
+            frames = wf.getnframes()
+            rate = wf.getframerate()
+            if rate > 0:
+                duration = frames / float(rate)
+                if duration > 0:
+                    logger.info(f"📏 Audio duration: {duration/60:.1f} minutes")
+                    return duration
     except Exception as e:
         logger.warning(f"Duration detection failed: {e}")
 
@@ -143,7 +145,7 @@ def split_audio(input_file: str, total_duration: float, progress: Optional[Calla
         actual_duration = min(chunk_duration, total_duration - start_time)
         try:
             cmd = [
-                "ffmpeg",
+                FFMPEG_BIN,
                 "-i",
                 input_file,
                 "-ss",

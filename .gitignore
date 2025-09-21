@@ -1,1 +1,60 @@
+# Environment files
 .env
+.env.*
+
+# Python cache/bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+*.dist-info/
+
+# Builds
+build/
+dist/
+pip-wheel-metadata/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE settings
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Type checkers
+.mypy_cache/
+.pytype/
+.pyre/
+
+# Logs
+logs/
+*.log
+
+# Streamlit
+.streamlit/secrets.toml
+.streamlit/config.toml
+
+# App artifacts
+summary_*.md
+
+# Cache and media
+youtube_cache/
+chunk_*.wav
+tmp/
+temp/
+*.tmp

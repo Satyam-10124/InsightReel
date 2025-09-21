@@ -18,6 +18,8 @@ from dotenv import load_dotenv
 import re
 import json
 from collections import Counter
+from insightreel.pipeline import SummarizerPipeline
+from insightreel.preferences import prompt_user_profile
 
 try:
     import yt_dlp
@@ -1338,16 +1340,16 @@ def main():
             return
         elif sys.argv[1] == '--help':
             print("Usage:")
-            print("  python youtube_summarizer.py                  # Run normally")
-            print("  python youtube_summarizer.py --cache-info     # Show cache info")
-            print("  python youtube_summarizer.py --clear-cache    # Clear cache")
-            print("  python youtube_summarizer.py --help           # Show help")
+            print("  python main.py                  # Run normally")
+            print("  python main.py --cache-info     # Show cache info")
+            print("  python main.py --clear-cache    # Clear cache")
+            print("  python main.py --help           # Show help")
             return
     
     try:
         # Initialize summarizer
         try:
-            summarizer = YouTubeSummarizer()
+            summarizer = SummarizerPipeline(model_size="base")
         except Exception as e:
             print(f"❌ Initialization failed: {e}")
             print("💡 Install required packages:")
@@ -1355,14 +1357,13 @@ def main():
             return
         
         # Check API status
-        if not summarizer.use_gemini:
+        if not getattr(summarizer, 'ai', None) or not getattr(summarizer.ai, 'enabled', False):
             print("⚠️  No Gemini API key - using basic summaries")
             print("💡 Add GEMINI_API_KEY to .env file for AI summaries")
-            print()
         
         # Get user preferences
         try:
-            summarizer.get_user_preferences()
+            user_profile = prompt_user_profile()
         except KeyboardInterrupt:
             print("\n👋 Thanks for using YouTube Summarizer!")
             return
@@ -1390,7 +1391,8 @@ def main():
                 return
         
         # Show processing info
-        user_profile = summarizer.user_profile
+        # Use the collected user profile
+        # user_profile is already available from prompt_user_profile()
         print(f"\n🚀 Processing for {user_profile['icon']} {user_profile['name']}...")
         print(f"📝 Style: {user_profile['length'].title()}")
         if user_profile.get('focus'):
@@ -1401,7 +1403,7 @@ def main():
         
         # Process video
         try:
-            result = summarizer.process_video(url)
+            result = summarizer.process(url, user_profile, save_markdown_to_file=True)
         except KeyboardInterrupt:
             print("\n⏹️  Processing cancelled")
             return

@@ -26,6 +26,7 @@ from datetime import datetime
 import base64
 import concurrent.futures
 import multiprocessing
+from insightreel.pipeline import SummarizerPipeline
 
 try:
     import yt_dlp
@@ -1836,7 +1837,7 @@ def main():
     # Initialize summarizer
     @st.cache_resource
     def load_summarizer():
-        return YouTubeSummarizer()
+        return SummarizerPipeline(model_size="small")
     
     try:
         summarizer = load_summarizer()
@@ -1876,10 +1877,10 @@ def main():
             
             try:
                 # Process with status updates
-                result = summarizer.process_video(
-                    url, 
+                result = summarizer.process(
+                    url,
                     st.session_state.user_profile,
-                    progress_callback=update_status
+                    progress=update_status,
                 )
                 
                 progress_bar.progress(100)

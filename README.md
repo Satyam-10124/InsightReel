@@ -51,7 +51,7 @@ GEMINI_API_KEY=your_gemini_api_key_here
 streamlit run app.py
 ```
 ```
-python run main.py
+python main.py
 ```
 
 ## 📋 Usage
@@ -139,3 +139,81 @@ FFmpeg needs to be installed on your system:
 - [ ] API endpoint
 - [ ] Batch processing
 - [ ] Custom themes
+
+---
+
+## 🧱 Developer Architecture
+
+The codebase is now modular and organized under the `insightreel/` package. Both the CLI (`main.py`) and the Streamlit app (`app.py`) depend on these reusable components.
+
+### Core Modules (`insightreel/`)
+
+- `logger.py`
+  - Centralized logging configuration via `configure_logging()` and `get_logger()`.
+
+- `preferences.py`
+  - CLI helper `prompt_user_profile()` to collect user profile (role, length, focus).
+  - Constants `USER_TYPES`, `LENGTH_TYPES`.
+
+- `cache.py`
+  - `CacheManager` to handle cache paths and JSON read/write for metadata and transcripts.
+  - Also provides `clear_all()` and `stats()`.
+
+- `youtube.py`
+  - `get_video_id_from_url()` and `fetch_metadata()` (using `yt-dlp`).
+
+- `audio.py`
+  - `download_audio()` to download and normalize audio to WAV mono 16kHz.
+  - `get_audio_duration()` via ffprobe with safe fallback.
+  - `split_audio()` to chunk audio and `smart_sample_audio()` to limit processing for long videos.
+
+- `text_cleaner.py`
+  - `clean_transcript_basic()` and `clean_transcript_advanced()` for transcript cleanup.
+
+- `transcriber.py`
+  - `Transcriber` wraps Whisper model loading and parallel chunk transcription.
+
+- `analysis.py`
+  - `extract_key_concepts()` computes keywords, domain concepts, technical terms, action words, and basic text stats.
+
+- `summarizer.py`
+  - High-quality markdown summary creation.
+  - Uses `AiClient` (Gemini) when available, otherwise falls back to a structured basic summary.
+
+- `ai.py`
+  - `AiClient` integrates with Google Generative AI (Gemini), auto-disabling when not configured.
+
+- `pipeline.py`
+  - `SummarizerPipeline` orchestrates the entire process end-to-end and returns a result dict.
+
+### App Integration
+
+- `app.py` (Streamlit)
+  - Uses `SummarizerPipeline` via a cached loader.
+  - Calls `pipeline.process(url, user_profile, progress=update_status)` to generate summaries.
+  - UI remains the same, now backed by modular services.
+
+- `main.py` (CLI)
+  - Uses `SummarizerPipeline` and `prompt_user_profile()` for interactive usage.
+  - Calls `pipeline.process(url, user_profile, save_markdown_to_file=True)`.
+
+### Notes
+
+- Caching directory: `youtube_cache/` (unchanged)
+- AI summaries are enabled when `GEMINI_API_KEY` is set; otherwise basic summaries are generated.
+
+## 🧪 Smoke Testing
+
+After installing requirements and FFmpeg:
+
+```
+streamlit run app.py
+```
+
+Or run the CLI:
+
+```
+python main.py
+```
+
+Follow the prompts and paste a YouTube URL to verify end-to-end processing.

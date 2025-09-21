@@ -100,6 +100,10 @@ class PipelineRunRequest(BaseModel):
     save_markdown_to_file: bool = False
 
 
+class AudioDownloadRequest(BaseModel):
+    url: HttpUrl
+
+
 # ---------------------------- App Setup --------------------------- #
 
 app = FastAPI(title="InsightReel API", version="1.0.0")
@@ -199,8 +203,8 @@ async def youtube_metadata(url: HttpUrl) -> Dict[str, Any]:
 # ------------------------- Audio Routes ------------------------- #
 
 @app.post("/audio/download", tags=["audio"])
-async def audio_download(url: HttpUrl) -> Dict[str, Any]:
-    url_str = str(url)
+async def audio_download(payload: AudioDownloadRequest) -> Dict[str, Any]:
+    url_str = str(payload.url)
     vid = youtube_utils.get_video_id_from_url(url_str)
     if not vid:
         raise HTTPException(status_code=400, detail="Invalid YouTube URL")

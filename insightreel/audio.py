@@ -51,28 +51,19 @@ def download_audio(url: str, video_id: str, cache: CacheManager, progress: Optio
     logger.info("📥 Downloading audio...")
 
     ydl_opts = {
-        "format": "bestaudio[ext=m4a]/bestaudio",
+        "format": "bestaudio/best",
         "outtmpl": output_path + ".%(ext)s",
         "quiet": True,
         "no_warnings": True,
         "socket_timeout": 60,
         "retries": 2,
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "wav",
-                "preferredquality": "128",
-            }
-        ],
-        "postprocessor_args": ["-ac", "1", "-ar", "16000"],
-        "ffmpeg_location": os.path.dirname(FFMPEG_BIN) if os.path.sep in FFMPEG_BIN else None,
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
 
     final_audio_file = str(paths["audio"])
-    possible_files = [output_path + ext for ext in [".wav", ".mp3", ".m4a"]]
+    possible_files = [output_path + ext for ext in [".wav", ".m4a", ".mp3", ".webm", ".opus"]]
 
     for test_file in possible_files:
         if os.path.exists(test_file):

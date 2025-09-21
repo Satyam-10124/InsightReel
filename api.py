@@ -21,9 +21,10 @@ import os
 from functools import lru_cache
 from typing import Optional, Dict, Any, List
 
-from fastapi import FastAPI, HTTPException, Query, Path
+from fastapi import FastAPI, HTTPException, Query, Path, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel, Field, HttpUrl, validator
 
 from insightreel.pipeline import SummarizerPipeline
@@ -32,6 +33,28 @@ from insightreel import youtube as youtube_utils
 from insightreel import audio as audio_utils
 from insightreel.transcriber import Transcriber
 from insightreel.analysis import extract_key_concepts
+
+# ------------------------ API Key Middleware ----------------------- #
+
+class APIKeyMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app: FastAPI, api_key: Optional[str] = None, exempt_paths: Optional[List[str]] = None) -> None:
+        super().__init__(app)
+        self.api_key = api_key
+        self.exempt = set(exempt_paths or ["/", "/health", "/docs", "/openapi.json"])
+
+    async def dispatch(self, request: Request, call_next):
+        # Disabled if no API key configured
+        if not self.api_key:
+            return await call_next(request)
+
+        path = request.url.path
+        if path in self.exempt or request.method == "OPTIONS":
+            return await call_next(request)
+
+        key = request.headers.get("X-API-KEY")
+        if key != self.api_key:
+            return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+        return await call_next(request)
 
 # ----------------------------- Models ----------------------------- #
 
@@ -80,12 +103,14 @@ class SummarizeRequest(BaseModel):
     save_markdown_to_file: bool = Field(default=False, description="Save summary to a markdown file on the server")
     sample_max_minutes: int = Field(default=20, ge=5, le=120, description="Cap transcription duration by sampling")
     max_video_seconds: int = Field(default=3 * 3600, ge=60, le=8 * 3600)
+    canonicalize: bool = Field(default=True, description="Canonicalize YouTube URL to avoid playlist/consent issues")
 
 
 class TranscribeRequest(BaseModel):
     url: HttpUrl
     sample_max_minutes: int = Field(default=20, ge=5, le=120)
     model_size: str = Field(default="small", description="Whisper model size")
+    canonicalize: bool = Field(default=True)
 
 
 class AnalyzeFromTranscriptsRequest(BaseModel):
@@ -98,10 +123,12 @@ class PipelineRunRequest(BaseModel):
     sample_max_minutes: int = Field(default=20, ge=5, le=120)
     max_video_seconds: int = Field(default=3 * 3600, ge=60, le=8 * 3600)
     save_markdown_to_file: bool = False
+    canonicalize: bool = Field(default=True)
 
 
 class AudioDownloadRequest(BaseModel):
     url: HttpUrl
+    canonicalize: bool = Field(default=True)
 
 
 # ---------------------------- App Setup --------------------------- #
@@ -114,6 +141,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(APIKeyMiddleware, api_key=os.getenv("API_KEY"))
 
 
 @lru_cache(maxsize=1)
@@ -136,6 +164,39 @@ async def health() -> Dict[str, Any]:
         }
     except Exception as e:
         return {"status": "error", "detail": str(e)}
+
+
+@app.get("/", response_class=HTMLResponse, tags=["system"])
+async def welcome() -> HTMLResponse:
+    model = os.getenv("WHISPER_MODEL", "small")
+    workers = os.getenv("MAX_TRANSCRIBE_WORKERS", "1")
+    example_base = "https://insight-reel-production.up.railway.app"
+    html = f"""
+    <html>
+      <head><title>InsightReel API</title></head>
+      <body style="font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 24px;">
+        <h1>InsightReel API</h1>
+        <p>Welcome! See <a href="/docs">/docs</a> for the interactive API docs.</p>
+        <h2>Build-time Config</h2>
+        <ul>
+          <li>WHISPER_MODEL: <code>{model}</code></li>
+          <li>MAX_TRANSCRIBE_WORKERS: <code>{workers}</code></li>
+        </ul>
+        <h2>Quick Examples (curl)</h2>
+        <pre>
+BASE={example_base}
+curl -sS "$BASE/health" | jq
+
+curl -sS -X POST "$BASE/audio/download" \
+  -H "Content-Type: application/json" \
+  -d '{{"url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ", "canonicalize": true}}' | jq
+
+curl -L "$BASE/audio/dQw4w9WgXcQ" -o audio.wav
+        </pre>
+      </body>
+    </html>
+    """
+    return HTMLResponse(content=html)
 
 
 @app.get("/cache/info", tags=["cache"])
@@ -164,8 +225,9 @@ async def summarize(payload: SummarizeRequest) -> Dict[str, Any]:
     }
 
     try:
+        url_to_use = youtube_utils.canonicalize_url(str(payload.url)) if payload.canonicalize else str(payload.url)
         result = pipe.process(
-            str(payload.url),
+            url_to_use,
             profile,
             progress=None,
             max_video_seconds=payload.max_video_seconds,
@@ -192,9 +254,10 @@ async def youtube_id(url: HttpUrl) -> Dict[str, Any]:
 
 
 @app.get("/youtube/metadata", tags=["youtube"])
-async def youtube_metadata(url: HttpUrl) -> Dict[str, Any]:
+async def youtube_metadata(url: HttpUrl, canonicalize: bool = True) -> Dict[str, Any]:
     try:
-        info = youtube_utils.fetch_metadata(str(url))
+        the_url = youtube_utils.canonicalize_url(str(url)) if canonicalize else str(url)
+        info = youtube_utils.fetch_metadata(the_url)
         return info
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Metadata fetch failed: {e}")
@@ -205,6 +268,8 @@ async def youtube_metadata(url: HttpUrl) -> Dict[str, Any]:
 @app.post("/audio/download", tags=["audio"])
 async def audio_download(payload: AudioDownloadRequest) -> Dict[str, Any]:
     url_str = str(payload.url)
+    if payload.canonicalize:
+        url_str = youtube_utils.canonicalize_url(url_str)
     vid = youtube_utils.get_video_id_from_url(url_str)
     if not vid:
         raise HTTPException(status_code=400, detail="Invalid YouTube URL")
@@ -235,6 +300,8 @@ async def audio_stream(video_id: str = Path(..., description="YouTube video ID")
 @app.post("/transcribe", tags=["transcription"])
 async def transcribe(payload: TranscribeRequest) -> Dict[str, Any]:
     url_str = str(payload.url)
+    if payload.canonicalize:
+        url_str = youtube_utils.canonicalize_url(url_str)
     vid = youtube_utils.get_video_id_from_url(url_str)
     if not vid:
         raise HTTPException(status_code=400, detail="Invalid YouTube URL")
@@ -284,8 +351,9 @@ async def pipeline_run(payload: PipelineRunRequest) -> Dict[str, Any]:
         "focus": None,
     }
     try:
+        url_to_use = youtube_utils.canonicalize_url(str(payload.url)) if payload.canonicalize else str(payload.url)
         result = pipe.process(
-            str(payload.url),
+            url_to_use,
             profile,
             progress=None,
             max_video_seconds=payload.max_video_seconds,

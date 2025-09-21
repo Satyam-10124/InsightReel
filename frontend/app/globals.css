@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --glass-bg: rgba(255, 255, 255, 0.08);
+  --glass-ring: rgba(255, 255, 255, 0.25);
+}
+
+html, body, #__next { height: 100%; }
+
+body {
+  @apply bg-neutral-950 text-white antialiased;
+  background-image:
+    radial-gradient(1000px 600px at 0% 0%, rgba(139,92,246,0.25), transparent),
+    radial-gradient(800px 500px at 100% 20%, rgba(59,130,246,0.2), transparent),
+    radial-gradient(600px 400px at 50% 100%, rgba(16,185,129,0.15), transparent);
+}
+
+/********************* Creative Primitives *********************/
+.glass {
+  @apply bg-white/5 backdrop-blur-xl border border-white/10 shadow-glow;
+}
+
+.btn {
+  @apply inline-flex items-center justify-center px-4 py-2 rounded-md font-medium transition-all
+    bg-iris-600 hover:bg-iris-500 active:bg-iris-700 shadow-glow;
+}
+.input {
+  @apply w-full px-4 py-2 rounded-md bg-white/5 border border-white/10 outline-none
+    focus:ring-2 focus:ring-iris-500 placeholder-white/40;
+}
+.label {
+  @apply text-sm text-white/70 mb-1;
+}
+
+.badge {
+  @apply inline-flex items-center gap-2 px-2 py-1 rounded-md text-xs bg-white/10 border border-white/10;
+}
+
+/********************* Page Decorations *********************/
+.gradient-orb {
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  filter: blur(80px);
+  opacity: 0.3;
+}
+.gradient-orb--iris {
+  background: radial-gradient(circle at 30% 30%, #8b5cf6, transparent 60%);
+  animation: float 10s ease-in-out infinite;
+}
+.gradient-orb--cyan {
+  background: radial-gradient(circle at 70% 70%, #22d3ee, transparent 60%);
+  animation: float 12s ease-in-out infinite;
+}

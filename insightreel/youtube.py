@@ -19,6 +19,15 @@ def get_video_id_from_url(url: str) -> Optional[str]:
     return match.group(1) if match else None
 
 
+def canonicalize_url(url: str) -> str:
+    """Return a canonical YouTube watch URL (https://www.youtube.com/watch?v={id}).
+
+    If an ID cannot be extracted, return the original URL unchanged.
+    """
+    vid = get_video_id_from_url(url)
+    return f"https://www.youtube.com/watch?v={vid}" if vid else url
+
+
 def fetch_metadata(url: str) -> Dict[str, object]:
     """Fetch video metadata via yt-dlp without downloading the video.
 

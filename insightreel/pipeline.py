@@ -55,6 +55,7 @@ class SummarizerPipeline:
         max_video_seconds: int = 3 * 3600,
         sample_max_minutes: int = 20,
         save_markdown_to_file: bool = False,
+        use_cookies: bool = False,
     ) -> Dict[str, object]:
         """Run the full pipeline and return results.
 
@@ -119,7 +120,9 @@ class SummarizerPipeline:
 
             # 2) Audio
             try:
-                audio_file = audio_utils.download_audio(url, video_id, self.cache, progress)
+                audio_file = audio_utils.download_audio(
+                    url, video_id, self.cache, progress, use_cookies=use_cookies
+                )
                 if not audio_file or not os.path.exists(audio_file):
                     raise RuntimeError("Audio download failed")
             except Exception as e:

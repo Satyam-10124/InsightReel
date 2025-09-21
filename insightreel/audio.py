@@ -11,6 +11,8 @@ import subprocess
 import wave
 import contextlib
 from pathlib import Path
+import base64
+import tempfile
 from typing import Callable, Dict, List, Optional
 
 from .cache import CacheManager
@@ -26,7 +28,13 @@ except Exception:  # pragma: no cover - optional runtime fetch
     FFMPEG_BIN = "ffmpeg"  # fallback to system ffmpeg
 
 
-def download_audio(url: str, video_id: str, cache: CacheManager, progress: Optional[Callable[[str], None]] = None) -> str:
+def download_audio(
+    url: str,
+    video_id: str,
+    cache: CacheManager,
+    progress: Optional[Callable[[str], None]] = None,
+    use_cookies: bool = False,
+) -> str:
     """Download best audio and convert to WAV mono 16kHz in cache.
 
     Returns path to WAV file in cache.
@@ -50,6 +58,27 @@ def download_audio(url: str, video_id: str, cache: CacheManager, progress: Optio
         progress("📥 Downloading audio...")
     logger.info("📥 Downloading audio...")
 
+    # Optionally materialize cookies from env into a temp file
+    cookiefile: Optional[str] = None
+    if use_cookies:
+        try:
+            b64 = os.getenv("YTDLP_COOKIES_B64")
+            raw = os.getenv("YTDLP_COOKIES")
+            path = os.getenv("YTDLP_COOKIES_PATH")
+            if b64:
+                data = base64.b64decode(b64)
+                tmp = Path(cache.cache_dir) / f"{video_id}_cookies.txt"
+                tmp.write_bytes(data)
+                cookiefile = str(tmp)
+            elif raw:
+                tmp = Path(cache.cache_dir) / f"{video_id}_cookies.txt"
+                tmp.write_text(raw, encoding="utf-8")
+                cookiefile = str(tmp)
+            elif path and os.path.exists(path):
+                cookiefile = path
+        except Exception as e:
+            logger.warning(f"Cookie setup failed: {e}")
+
     ydl_opts = {
         "format": "bestaudio/best",
         "outtmpl": output_path + ".%(ext)s",
@@ -72,6 +101,8 @@ def download_audio(url: str, video_id: str, cache: CacheManager, progress: Optio
         # Encourage yt-dlp to use Android client where appropriate, which often avoids consent/403 pages
         "extractor_args": {"youtube": {"player_client": ["android"]}},
     }
+    if cookiefile:
+        ydl_opts["cookiefile"] = cookiefile
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
@@ -79,6 +110,13 @@ def download_audio(url: str, video_id: str, cache: CacheManager, progress: Optio
         except Exception as e:
             # Surface a clearer error upstream
             raise RuntimeError(f"Audio download failed (yt-dlp): {e}")
+        finally:
+            # Clean up temp cookiefile if we created one
+            try:
+                if cookiefile and os.path.exists(cookiefile) and os.path.dirname(cookiefile) == str(cache.cache_dir):
+                    os.remove(cookiefile)
+            except Exception:
+                pass
 
     final_audio_file = str(paths["audio"])
     possible_files = [output_path + ext for ext in [".wav", ".m4a", ".mp3", ".webm", ".opus"]]

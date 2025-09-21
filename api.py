@@ -104,6 +104,7 @@ class SummarizeRequest(BaseModel):
     sample_max_minutes: int = Field(default=20, ge=5, le=120, description="Cap transcription duration by sampling")
     max_video_seconds: int = Field(default=3 * 3600, ge=60, le=8 * 3600)
     canonicalize: bool = Field(default=True, description="Canonicalize YouTube URL to avoid playlist/consent issues")
+    use_cookies: bool = Field(default=False, description="Use server-provisioned YouTube cookies for gated videos")
 
 
 class TranscribeRequest(BaseModel):
@@ -111,6 +112,7 @@ class TranscribeRequest(BaseModel):
     sample_max_minutes: int = Field(default=20, ge=5, le=120)
     model_size: str = Field(default="small", description="Whisper model size")
     canonicalize: bool = Field(default=True)
+    use_cookies: bool = Field(default=False)
 
 
 class AnalyzeFromTranscriptsRequest(BaseModel):
@@ -124,11 +126,13 @@ class PipelineRunRequest(BaseModel):
     max_video_seconds: int = Field(default=3 * 3600, ge=60, le=8 * 3600)
     save_markdown_to_file: bool = False
     canonicalize: bool = Field(default=True)
+    use_cookies: bool = Field(default=False)
 
 
 class AudioDownloadRequest(BaseModel):
     url: HttpUrl
     canonicalize: bool = Field(default=True)
+    use_cookies: bool = Field(default=False)
 
 
 # ---------------------------- App Setup --------------------------- #
@@ -233,6 +237,7 @@ async def summarize(payload: SummarizeRequest) -> Dict[str, Any]:
             max_video_seconds=payload.max_video_seconds,
             sample_max_minutes=payload.sample_max_minutes,
             save_markdown_to_file=payload.save_markdown_to_file,
+            use_cookies=payload.use_cookies,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Processing failed: {e}")
@@ -274,7 +279,7 @@ async def audio_download(payload: AudioDownloadRequest) -> Dict[str, Any]:
     if not vid:
         raise HTTPException(status_code=400, detail="Invalid YouTube URL")
     pipe = get_pipeline()
-    audio_path = audio_utils.download_audio(url_str, vid, pipe.cache)
+    audio_path = audio_utils.download_audio(url_str, vid, pipe.cache, use_cookies=payload.use_cookies)
     dur = audio_utils.get_audio_duration(audio_path)
     return {
         "video_id": vid,
@@ -307,7 +312,7 @@ async def transcribe(payload: TranscribeRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="Invalid YouTube URL")
 
     cache = CacheManager()
-    audio_path = audio_utils.download_audio(url_str, vid, cache)
+    audio_path = audio_utils.download_audio(url_str, vid, cache, use_cookies=payload.use_cookies)
     duration = audio_utils.get_audio_duration(audio_path)
     chunks = audio_utils.split_audio(audio_path, duration)
 
